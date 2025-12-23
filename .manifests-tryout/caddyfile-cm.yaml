@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kaddy-caddyfile
+  namespace: kaddy
+data:
+  Caddyfile: |
+    {
+      http_port 8080
+      https_port 8443
+    }
+    kaddy-kaddy.apps-crc.testing {
+      respond "Hello from Kaddy!"
+      tls internal
+    }
+binaryData: {}
+immutable: false

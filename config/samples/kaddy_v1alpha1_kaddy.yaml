@@ -1,0 +1,10 @@
+apiVersion: kaddy.quay.io/v1alpha1
+kind: Kaddy
+metadata:
+  labels:
+    app.kubernetes.io/name: kaddy
+    app.kubernetes.io/managed-by: kustomize
+  name: kaddy
+spec:
+  localDomainNames:
+    - kaddy-kaddy.apps-crc.testing

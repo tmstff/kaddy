@@ -1,0 +1,27 @@
+# This rule is not used by the project kaddy itself.
+# It is provided to allow the cluster admin to help manage permissions for users.
+#
+# Grants full permissions ('*') over kaddy.quay.io.
+# This role is intended for users authorized to modify roles and bindings within the cluster,
+# enabling them to delegate specific permissions to other users or groups as needed.
+
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/name: kaddy
+    app.kubernetes.io/managed-by: kustomize
+  name: kaddy-admin-role
+rules:
+- apiGroups:
+  - kaddy.quay.io
+  resources:
+  - kaddies
+  verbs:
+  - '*'
+- apiGroups:
+  - kaddy.quay.io
+  resources:
+  - kaddies/status
+  verbs:
+  - get

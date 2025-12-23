@@ -1,0 +1,41 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kaddy
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kaddy
+  template:
+    metadata:
+      labels:
+        app: kaddy
+    spec:
+      containers:
+      - name: kaddy
+        image: quay.io/hummingbird/caddy:latest
+        ports:
+        - containerPort: 8080
+        - containerPort: 8443
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "250m"
+          limits:
+            memory: "128Mi"
+            cpu: "500m"
+        volumeMounts:
+          - name: caddyfile-vol
+            mountPath: /etc/caddy/Caddyfile
+            subPath: Caddyfile
+          - name: data-vol
+            mountPath: /data/caddy
+      volumes:
+        - name: caddyfile-vol
+          configMap:
+            name: caddyfile
+        - name: data-vol
+          persistentVolumeClaim:
+            claimName: kaddy-data 
+          
