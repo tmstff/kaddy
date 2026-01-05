@@ -21,6 +21,8 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -32,13 +34,13 @@ import (
 
 var _ = Describe("Kaddy Controller", func() {
 	Context("When reconciling a resource", func() {
-		const resourceName = "test-resource"
+		const resourceName = "test-kaddy"
 
 		ctx := context.Background()
 
 		typeNamespacedName := types.NamespacedName{
 			Name:      resourceName,
-			Namespace: "default", // TODO(user):Modify as needed
+			Namespace: "default",
 		}
 		kaddy := &kaddyv1alpha1.Kaddy{}
 
@@ -48,23 +50,35 @@ var _ = Describe("Kaddy Controller", func() {
 			if err != nil && errors.IsNotFound(err) {
 				resource := &kaddyv1alpha1.Kaddy{
 					ObjectMeta: metav1.ObjectMeta{
-						Name:      resourceName,
-						Namespace: "default",
+						Name:      typeNamespacedName.Name,
+						Namespace: typeNamespacedName.Namespace,
 					},
-					// TODO(user): Specify other spec details if needed.
+					Spec: kaddyv1alpha1.KaddySpec{
+						LocalDomainNames: []string{"test-domain"},
+					},
 				}
 				Expect(k8sClient.Create(ctx, resource)).To(Succeed())
 			}
 		})
 
 		AfterEach(func() {
-			// TODO(user): Cleanup logic after each test, like removing the resource instance.
 			resource := &kaddyv1alpha1.Kaddy{}
 			err := k8sClient.Get(ctx, typeNamespacedName, resource)
 			Expect(err).NotTo(HaveOccurred())
-
 			By("Cleanup the specific resource instance Kaddy")
 			Expect(k8sClient.Delete(ctx, resource)).To(Succeed())
+
+			cm := &corev1.ConfigMap{}
+			err = k8sClient.Get(ctx, typeNamespacedName, cm)
+			Expect(err).NotTo(HaveOccurred())
+			By("Cleanup the specific ConfigMap created by the operator")
+			Expect(k8sClient.Delete(ctx, cm)).To(Succeed())
+
+			d := &appsv1.Deployment{}
+			err = k8sClient.Get(ctx, typeNamespacedName, d)
+			Expect(err).NotTo(HaveOccurred())
+			By("Cleanup the specific Deployment created by the operator")
+			Expect(k8sClient.Delete(ctx, d)).To(Succeed())
 		})
 		It("should successfully reconcile the resource", func() {
 			By("Reconciling the created resource")
@@ -77,8 +91,16 @@ var _ = Describe("Kaddy Controller", func() {
 				NamespacedName: typeNamespacedName,
 			})
 			Expect(err).NotTo(HaveOccurred())
-			// TODO(user): Add more specific assertions depending on your controller's reconciliation logic.
-			// Example: If you expect a certain status condition after reconciliation, verify it here.
+
+			cm := &corev1.ConfigMap{}
+			err = k8sClient.Get(ctx, typeNamespacedName, cm)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(cm.Data["Caddyfile"]).NotTo(BeNil())
+			Expect(cm.Data["Caddyfile"]).To(ContainSubstring("test-domain {"))
+
+			d := &appsv1.Deployment{}
+			err = k8sClient.Get(ctx, typeNamespacedName, d)
+			Expect(err).NotTo(HaveOccurred())
 		})
 	})
 })
