@@ -19,6 +19,7 @@ package controller
 import (
 	"context"
 	"fmt"
+	"reflect"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -60,6 +61,7 @@ func (r *KaddyReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 	err := r.Get(ctx, types.NamespacedName{Name: req.Name, Namespace: req.Namespace}, kaddy)
 	if err != nil {
 		if errors.IsNotFound(err) {
+			// TODO Delete everything!
 			return ctrl.Result{}, nil
 		}
 		return ctrl.Result{}, err
@@ -94,10 +96,12 @@ func (r *KaddyReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 
 	// handle pvc
 
-	deployment := &appsv1.Deployment{}
-	err = r.Get(ctx, types.NamespacedName{Name: kaddy.Name, Namespace: kaddy.Namespace}, deployment)
+	deploymentFromCluster := &appsv1.Deployment{}
+	err = r.Get(ctx, types.NamespacedName{Name: kaddy.Name, Namespace: kaddy.Namespace}, deploymentFromCluster)
+	deploymentExisted := true
 	if err != nil {
 		if errors.IsNotFound(err) {
+			deploymentExisted = false
 			// Define and create a new deployment.
 			dep, err := r.deploymentForKaddy(kaddy)
 			if err != nil {
@@ -111,13 +115,16 @@ func (r *KaddyReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 		}
 	}
 
-	// TODO only update if necessary
-	deployment, err = r.deploymentForKaddy(kaddy)
-	if err != nil {
-		return ctrl.Result{}, err
-	}
-	if err := r.Update(ctx, deployment); err != nil {
-		return ctrl.Result{}, err
+	if deploymentExisted {
+		updatedDeployment, err := r.deploymentForKaddy(kaddy)
+		if err != nil {
+			return ctrl.Result{}, err
+		}
+		if !reflect.DeepEqual(deploymentFromCluster.Spec, updatedDeployment.Spec) {
+			if err := r.Update(ctx, updatedDeployment); err != nil {
+				return ctrl.Result{}, err
+			}
+		}
 	}
 
 	// restart pods if necessary
