@@ -44,9 +44,9 @@ type KaddyReconciler struct {
 // +kubebuilder:rbac:groups=kaddy.quay.io,resources=kaddies,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=kaddy.quay.io,resources=kaddies/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=kaddy.quay.io,resources=kaddies/finalizers,verbs=update
-//+kubebuilder:rbac:groups=core,resources=events,verbs=create;patch
-//+kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;watch
+// +kubebuilder:rbac:groups=core,resources=events,verbs=create;patch
+// +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;watch
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -103,7 +103,10 @@ func (r *KaddyReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 	if err != nil {
 		if errors.IsNotFound(err) {
 			// Define and create a new deployment.
-			dep := r.deploymentForKaddy(kaddy)
+			dep, err := r.deploymentForKaddy(kaddy)
+			if err != nil {
+				return ctrl.Result{}, err
+			}
 			if err = r.Create(ctx, dep); err != nil {
 				return ctrl.Result{}, err
 			}
@@ -113,7 +116,10 @@ func (r *KaddyReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 	}
 
 	// TODO only update if necessary
-	deployment = r.deploymentForKaddy(kaddy)
+	deployment, err = r.deploymentForKaddy(kaddy)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
 	if err := r.Update(ctx, deployment); err != nil {
 		return ctrl.Result{}, err
 	}
@@ -167,7 +173,7 @@ func (*KaddyReconciler) caddyfileFor(localDomainNames []string) string {
 	return caddyfile
 }
 
-func (r *KaddyReconciler) deploymentForKaddy(k *kaddyv1alpha1.Kaddy) *appsv1.Deployment {
+func (r *KaddyReconciler) deploymentForKaddy(k *kaddyv1alpha1.Kaddy) (*appsv1.Deployment, error) {
 	replicas := int32(1)
 	label := labelForApp(k.Name)
 
@@ -242,8 +248,11 @@ func (r *KaddyReconciler) deploymentForKaddy(k *kaddyv1alpha1.Kaddy) *appsv1.Dep
 		},
 	}
 
-	controllerutil.SetControllerReference(k, d, r.Scheme)
-	return d
+	err := controllerutil.SetControllerReference(k, d, r.Scheme)
+	if err != nil {
+		return nil, err
+	}
+	return d, nil
 }
 
 func labelForApp(name string) map[string]string {
