@@ -34,6 +34,7 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
 	kaddyv1alpha1 "github.com/tmstff/kaddy/api/v1alpha1"
+	"github.com/tmstff/kaddy/internal/util"
 )
 
 // KaddyReconciler reconciles a Kaddy object
@@ -67,74 +68,83 @@ func (r *KaddyReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 		return ctrl.Result{}, err
 	}
 
-	// TODO update ConfigMap
-	configMap := new(corev1.ConfigMap)
-	configMapExisted := true
-	err = r.Get(ctx, types.NamespacedName{Name: kaddy.Name, Namespace: kaddy.Namespace}, configMap)
+	err = r.reconcileConfigMap(ctx, kaddy)
 	if err != nil {
-		if errors.IsNotFound(err) {
-			// Define and create a new deployment.
-			cm := r.configMapForKaddy(kaddy)
-			if err = r.Create(ctx, cm); err != nil {
-				return ctrl.Result{}, err
-			}
-			configMapExisted = false
-		} else {
-			return ctrl.Result{}, err
-		}
+		return ctrl.Result{}, err
 	}
 
-	updated := false
-	if configMapExisted {
-		updated, err = r.updateConfigMap(ctx, configMap, kaddy)
-		if err != nil {
-			return ctrl.Result{}, err
-		}
-	}
+	// reconcile pvc
 
-	restartPods := !configMapExisted || updated
-
-	// handle pvc
-
-	deploymentFromCluster := &appsv1.Deployment{}
-	err = r.Get(ctx, types.NamespacedName{Name: kaddy.Name, Namespace: kaddy.Namespace}, deploymentFromCluster)
-	deploymentExisted := true
+	err = r.reconcileDeployment(ctx, kaddy)
 	if err != nil {
-		if errors.IsNotFound(err) {
-			deploymentExisted = false
-			// Define and create a new deployment.
-			dep, err := r.deploymentForKaddy(kaddy)
-			if err != nil {
-				return ctrl.Result{}, err
-			}
-			if err = r.Create(ctx, dep); err != nil {
-				return ctrl.Result{}, err
-			}
-		} else {
-			return ctrl.Result{}, err
-		}
+		return ctrl.Result{}, err
 	}
-
-	if deploymentExisted {
-		updatedDeployment, err := r.deploymentForKaddy(kaddy)
-		if err != nil {
-			return ctrl.Result{}, err
-		}
-		if !reflect.DeepEqual(deploymentFromCluster.Spec, updatedDeployment.Spec) {
-			if err := r.Update(ctx, updatedDeployment); err != nil {
-				return ctrl.Result{}, err
-			}
-		}
-	}
-
-	// restart pods if necessary
-	print(restartPods)
 
 	// TODO handle service
 
 	// TODO handle route
 
 	return ctrl.Result{Requeue: true}, nil
+}
+
+func (r *KaddyReconciler) reconcileConfigMap(ctx context.Context, kaddy *kaddyv1alpha1.Kaddy) error {
+	configMapFromCluster := new(corev1.ConfigMap)
+	configMapExisted := true
+	err := r.Get(ctx, types.NamespacedName{Name: kaddy.Name, Namespace: kaddy.Namespace}, configMapFromCluster)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			configMapExisted = false
+			cm := r.configMapForKaddy(kaddy)
+			if err = r.Create(ctx, cm); err != nil {
+				return err
+			}
+		} else {
+			return err
+		}
+	}
+
+	if configMapExisted {
+		updatedConfigMap := r.configMapForKaddy(kaddy)
+		if !reflect.DeepEqual(configMapFromCluster.Data, updatedConfigMap.Data) {
+			if err := r.Update(ctx, updatedConfigMap); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func (r *KaddyReconciler) reconcileDeployment(ctx context.Context, kaddy *kaddyv1alpha1.Kaddy) error {
+	deploymentFromCluster := &appsv1.Deployment{}
+	err := r.Get(ctx, types.NamespacedName{Name: kaddy.Name, Namespace: kaddy.Namespace}, deploymentFromCluster)
+	deploymentExisted := true
+	if err != nil {
+		if errors.IsNotFound(err) {
+			deploymentExisted = false
+			dep, err := r.deploymentForKaddy(ctx, kaddy)
+			if err != nil {
+				return err
+			}
+			if err = r.Create(ctx, dep); err != nil {
+				return err
+			}
+		} else {
+			return err
+		}
+	}
+
+	if deploymentExisted {
+		updatedDeployment, err := r.deploymentForKaddy(ctx, kaddy)
+		if err != nil {
+			return err
+		}
+		if !reflect.DeepEqual(deploymentFromCluster.Spec, updatedDeployment.Spec) {
+			if err := r.Update(ctx, updatedDeployment); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 func (r *KaddyReconciler) configMapForKaddy(k *kaddyv1alpha1.Kaddy) *corev1.ConfigMap {
@@ -145,20 +155,6 @@ func (r *KaddyReconciler) configMapForKaddy(k *kaddyv1alpha1.Kaddy) *corev1.Conf
 		},
 		Data: map[string]string{`Caddyfile`: r.caddyfileFor(k.Spec.LocalDomainNames)},
 	}
-}
-
-func (r *KaddyReconciler) updateConfigMap(ctx context.Context, configMap *corev1.ConfigMap, kaddy *kaddyv1alpha1.Kaddy) (updated bool, err error) {
-	updateRequired := false
-	localDomainNames := kaddy.Spec.LocalDomainNames
-	caddyfile := r.caddyfileFor(localDomainNames)
-	if configMap.Data[`Caddyfile`] != caddyfile {
-		configMap.Data[`Caddyfile`] = caddyfile
-		updateRequired = true
-		if err := r.Update(ctx, configMap); err != nil {
-			return false, err
-		}
-	}
-	return updateRequired, nil
 }
 
 func (*KaddyReconciler) caddyfileFor(localDomainNames []string) string {
@@ -176,9 +172,13 @@ func (*KaddyReconciler) caddyfileFor(localDomainNames []string) string {
 	return caddyfile
 }
 
-func (r *KaddyReconciler) deploymentForKaddy(k *kaddyv1alpha1.Kaddy) (*appsv1.Deployment, error) {
+func (r *KaddyReconciler) deploymentForKaddy(ctx context.Context, k *kaddyv1alpha1.Kaddy) (*appsv1.Deployment, error) {
 	replicas := int32(1)
-	label := labelForApp(k.Name)
+
+	cmChecksum, err := r.computeConfigMapChecksum(ctx, k)
+	if err != nil {
+		return nil, err
+	}
 
 	d := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
@@ -188,11 +188,12 @@ func (r *KaddyReconciler) deploymentForKaddy(k *kaddyv1alpha1.Kaddy) (*appsv1.De
 		Spec: appsv1.DeploymentSpec{
 			Replicas: &replicas,
 			Selector: &metav1.LabelSelector{
-				MatchLabels: label,
+				MatchLabels: map[string]string{"app": k.Name},
 			},
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
-					Labels: label,
+					Labels:      map[string]string{"app": k.Name},
+					Annotations: map[string]string{"kaddy-config-map-checksum": cmChecksum},
 				},
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{{
@@ -251,15 +252,20 @@ func (r *KaddyReconciler) deploymentForKaddy(k *kaddyv1alpha1.Kaddy) (*appsv1.De
 		},
 	}
 
-	err := controllerutil.SetControllerReference(k, d, r.Scheme)
+	err = controllerutil.SetControllerReference(k, d, r.Scheme)
 	if err != nil {
 		return nil, err
 	}
 	return d, nil
 }
 
-func labelForApp(name string) map[string]string {
-	return map[string]string{"app": name}
+func (r *KaddyReconciler) computeConfigMapChecksum(ctx context.Context, kaddy *kaddyv1alpha1.Kaddy) (string, error) {
+	configMapFromCluster := new(corev1.ConfigMap)
+	err := r.Get(ctx, types.NamespacedName{Name: kaddy.Name, Namespace: kaddy.Namespace}, configMapFromCluster)
+	if err != nil {
+		return "", err
+	}
+	return util.CheckSumOf(configMapFromCluster.Data), nil
 }
 
 // SetupWithManager sets up the controller with the Manager.
