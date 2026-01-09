@@ -98,8 +98,11 @@ func (r *KaddyReconciler) reconcileConfigMap(ctx context.Context, kaddy *kaddyv1
 		if errors.IsNotFound(err) {
 			configMapExisted = false
 			cm := r.configMapForKaddy(kaddy)
-			ctrl.SetControllerReference(kaddy, cm, r.Scheme) // for later automatic deletion
 			if err = r.Create(ctx, cm); err != nil {
+				return err
+			}
+			err = ctrl.SetControllerReference(kaddy, cm, r.Scheme) // for later automatic deletion
+			if err != nil {
 				return err
 			}
 		} else {
@@ -126,11 +129,14 @@ func (r *KaddyReconciler) reconcileDeployment(ctx context.Context, kaddy *kaddyv
 		if errors.IsNotFound(err) {
 			deploymentExisted = false
 			d, err := r.deploymentForKaddy(ctx, kaddy)
-			ctrl.SetControllerReference(kaddy, d, r.Scheme) // for later automatic deletion
 			if err != nil {
 				return err
 			}
 			if err = r.Create(ctx, d); err != nil {
+				return err
+			}
+			err = ctrl.SetControllerReference(kaddy, d, r.Scheme) // for later automatic deletion
+			if err != nil {
 				return err
 			}
 		} else {
