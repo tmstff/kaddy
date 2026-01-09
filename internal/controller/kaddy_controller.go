@@ -62,7 +62,10 @@ func (r *KaddyReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 	err := r.Get(ctx, types.NamespacedName{Name: req.Name, Namespace: req.Namespace}, kaddy)
 	if err != nil {
 		if errors.IsNotFound(err) {
-			// TODO Delete everything!
+			// Request object not found, could have been deleted after reconcile request.
+			// finalizer: https://sdk.operatorframework.io/docs/building-operators/golang/advanced-topics/#handle-cleanup-on-deletion
+			// Owned objects are automatically garbage collected. For additional cleanup logic use finalizers.
+			// Return and don't requeue
 			return ctrl.Result{}, nil
 		}
 		return ctrl.Result{}, err
@@ -95,6 +98,7 @@ func (r *KaddyReconciler) reconcileConfigMap(ctx context.Context, kaddy *kaddyv1
 		if errors.IsNotFound(err) {
 			configMapExisted = false
 			cm := r.configMapForKaddy(kaddy)
+			ctrl.SetControllerReference(kaddy, cm, r.Scheme) // for later automatic deletion
 			if err = r.Create(ctx, cm); err != nil {
 				return err
 			}
@@ -121,11 +125,12 @@ func (r *KaddyReconciler) reconcileDeployment(ctx context.Context, kaddy *kaddyv
 	if err != nil {
 		if errors.IsNotFound(err) {
 			deploymentExisted = false
-			dep, err := r.deploymentForKaddy(ctx, kaddy)
+			d, err := r.deploymentForKaddy(ctx, kaddy)
+			ctrl.SetControllerReference(kaddy, d, r.Scheme) // for later automatic deletion
 			if err != nil {
 				return err
 			}
-			if err = r.Create(ctx, dep); err != nil {
+			if err = r.Create(ctx, d); err != nil {
 				return err
 			}
 		} else {
