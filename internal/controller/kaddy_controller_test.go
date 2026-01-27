@@ -62,21 +62,23 @@ var _ = Describe("Kaddy Controller", func() {
 		})
 
 		AfterEach(func() {
-			resource := &kaddyv1alpha1.Kaddy{}
-			err := k8sClient.Get(ctx, typeNamespacedName, resource)
-			Expect(err).NotTo(HaveOccurred())
-			By("Cleanup the specific resource instance Kaddy")
-			Expect(k8sClient.Delete(ctx, resource)).To(Succeed())
+			kaddy := &kaddyv1alpha1.Kaddy{}
+			Expect(k8sClient.Get(ctx, typeNamespacedName, kaddy)).To(Succeed())
+			By("Cleanup the specific Kaddy resource")
+			Expect(k8sClient.Delete(ctx, kaddy)).To(Succeed())
 
 			cm := &corev1.ConfigMap{}
-			err = k8sClient.Get(ctx, typeNamespacedName, cm)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(k8sClient.Get(ctx, typeNamespacedName, cm)).To(Succeed())
 			By("Cleanup the specific ConfigMap created by the operator")
 			Expect(k8sClient.Delete(ctx, cm)).To(Succeed())
 
+			pvc := &corev1.PersistentVolumeClaim{}
+			Expect(k8sClient.Get(ctx, typeNamespacedName, pvc)).To(Succeed())
+			By("Cleanup the specific PersistentVolumeClaim created by the operator")
+			Expect(k8sClient.Delete(ctx, pvc)).To(Succeed())
+
 			d := &appsv1.Deployment{}
-			err = k8sClient.Get(ctx, typeNamespacedName, d)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(k8sClient.Get(ctx, typeNamespacedName, d)).To(Succeed())
 			By("Cleanup the specific Deployment created by the operator")
 			Expect(k8sClient.Delete(ctx, d)).To(Succeed())
 		})
@@ -97,6 +99,10 @@ var _ = Describe("Kaddy Controller", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(cm.Data["Caddyfile"]).NotTo(BeNil())
 			Expect(cm.Data["Caddyfile"]).To(ContainSubstring("test-domain {"))
+
+			pvc := &corev1.PersistentVolumeClaim{}
+			err = k8sClient.Get(ctx, typeNamespacedName, pvc)
+			Expect(err).NotTo(HaveOccurred())
 
 			d := &appsv1.Deployment{}
 			err = k8sClient.Get(ctx, typeNamespacedName, d)
