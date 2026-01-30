@@ -28,6 +28,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
@@ -40,6 +41,14 @@ import (
 type KaddyReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
+}
+
+// SetupWithManager sets up the controller with the Manager.
+func (r *KaddyReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	return ctrl.NewControllerManagedBy(mgr).
+		For(&kaddyv1alpha1.Kaddy{}).
+		Named("kaddy_controller").
+		Complete(r)
 }
 
 // +kubebuilder:rbac:groups=kaddy.quay.io,resources=kaddies,verbs=get;list;watch;create;update;patch;delete
@@ -84,7 +93,10 @@ func (r *KaddyReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 		return ctrl.Result{}, err
 	}
 
-	// TODO handle service
+	err = r.reconcileService(ctx, kaddy)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
 
 	// TODO handle route
 
@@ -145,15 +157,6 @@ func (*KaddyReconciler) caddyfileFor(localDomainNames []string) string {
 		}`, dn)
 	}
 	return caddyfile
-}
-
-func (r *KaddyReconciler) computeConfigMapChecksum(ctx context.Context, kaddy *kaddyv1alpha1.Kaddy) (string, error) {
-	configMapFromCluster := new(corev1.ConfigMap)
-	err := r.Get(ctx, types.NamespacedName{Name: kaddy.Name, Namespace: kaddy.Namespace}, configMapFromCluster)
-	if err != nil {
-		return "", err
-	}
-	return util.CheckSumOf(configMapFromCluster.Data), nil
 }
 
 func (r *KaddyReconciler) reconcilePVC(ctx context.Context, kaddy *kaddyv1alpha1.Kaddy) error {
@@ -329,10 +332,66 @@ func (r *KaddyReconciler) deploymentForKaddy(ctx context.Context, k *kaddyv1alph
 	return d, nil
 }
 
-// SetupWithManager sets up the controller with the Manager.
-func (r *KaddyReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewControllerManagedBy(mgr).
-		For(&kaddyv1alpha1.Kaddy{}).
-		Named("kaddy_controller").
-		Complete(r)
+func (r *KaddyReconciler) computeConfigMapChecksum(ctx context.Context, kaddy *kaddyv1alpha1.Kaddy) (string, error) {
+	configMapFromCluster := new(corev1.ConfigMap)
+	err := r.Get(ctx, types.NamespacedName{Name: kaddy.Name, Namespace: kaddy.Namespace}, configMapFromCluster)
+	if err != nil {
+		return "", err
+	}
+	return util.CheckSumOf(configMapFromCluster.Data), nil
+}
+
+func (r *KaddyReconciler) reconcileService(ctx context.Context, kaddy *kaddyv1alpha1.Kaddy) error {
+	serviceFromCluster := &corev1.Service{}
+	serviceExists := true
+	err := r.Get(ctx, types.NamespacedName{Name: kaddy.Name, Namespace: kaddy.Namespace}, serviceFromCluster)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			serviceExists = false
+		} else {
+			return err
+		}
+	}
+
+	if serviceExists {
+		updatedService := r.serviceForKaddy(kaddy)
+		if !reflect.DeepEqual(serviceFromCluster.Spec, updatedService.Spec) {
+			if err := r.Update(ctx, updatedService); err != nil {
+				return err
+			}
+		}
+	} else {
+		s := r.serviceForKaddy(kaddy)
+		if err := r.Create(ctx, s); err != nil {
+			return err
+		}
+		err = ctrl.SetControllerReference(kaddy, s, r.Scheme) // for later automatic deletion
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (r *KaddyReconciler) serviceForKaddy(k *kaddyv1alpha1.Kaddy) *corev1.Service {
+	s := &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      k.Name,
+			Namespace: k.Namespace,
+		},
+		Spec: corev1.ServiceSpec{
+			Selector: map[string]string{
+				"app": "kaddy",
+			},
+			Ports: []corev1.ServicePort{
+				{
+					Protocol:   corev1.ProtocolTCP,
+					Port:       8443,
+					TargetPort: intstr.FromInt(8443),
+				},
+			},
+		},
+	}
+	return s
 }

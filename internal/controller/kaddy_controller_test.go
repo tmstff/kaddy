@@ -62,25 +62,26 @@ var _ = Describe("Kaddy Controller", func() {
 		})
 
 		AfterEach(func() {
+			By("Cleanup all resources created")
 			kaddy := &kaddyv1alpha1.Kaddy{}
 			Expect(k8sClient.Get(ctx, typeNamespacedName, kaddy)).To(Succeed())
-			By("Cleanup the specific Kaddy resource")
 			Expect(k8sClient.Delete(ctx, kaddy)).To(Succeed())
 
 			cm := &corev1.ConfigMap{}
 			Expect(k8sClient.Get(ctx, typeNamespacedName, cm)).To(Succeed())
-			By("Cleanup the specific ConfigMap created by the operator")
 			Expect(k8sClient.Delete(ctx, cm)).To(Succeed())
 
 			pvc := &corev1.PersistentVolumeClaim{}
 			Expect(k8sClient.Get(ctx, typeNamespacedName, pvc)).To(Succeed())
-			By("Cleanup the specific PersistentVolumeClaim created by the operator")
 			Expect(k8sClient.Delete(ctx, pvc)).To(Succeed())
 
 			d := &appsv1.Deployment{}
 			Expect(k8sClient.Get(ctx, typeNamespacedName, d)).To(Succeed())
-			By("Cleanup the specific Deployment created by the operator")
 			Expect(k8sClient.Delete(ctx, d)).To(Succeed())
+
+			s := &corev1.Service{}
+			Expect(k8sClient.Get(ctx, typeNamespacedName, s)).To(Succeed())
+			Expect(k8sClient.Delete(ctx, s)).To(Succeed())
 		})
 		It("should successfully reconcile the resource", func() {
 			By("Reconciling the created resource")
@@ -94,10 +95,13 @@ var _ = Describe("Kaddy Controller", func() {
 			})
 			Expect(err).NotTo(HaveOccurred())
 
+			// Tests for statically configured values are omitted on purpose
+
 			cm := &corev1.ConfigMap{}
 			err = k8sClient.Get(ctx, typeNamespacedName, cm)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(cm.Data["Caddyfile"]).NotTo(BeNil())
+			// check if content sounds plausible taking the domain name from the CR into account
 			Expect(cm.Data["Caddyfile"]).To(ContainSubstring("test-domain {"))
 
 			pvc := &corev1.PersistentVolumeClaim{}
@@ -107,6 +111,12 @@ var _ = Describe("Kaddy Controller", func() {
 			d := &appsv1.Deployment{}
 			err = k8sClient.Get(ctx, typeNamespacedName, d)
 			Expect(err).NotTo(HaveOccurred())
+
+			s := &corev1.Service{}
+			err = k8sClient.Get(ctx, typeNamespacedName, s)
+			Expect(err).NotTo(HaveOccurred())
 		})
+		// TODO test if updating of existing resources works properly
+		// TODO test deletion?
 	})
 })
