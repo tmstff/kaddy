@@ -37,6 +37,8 @@ import (
 	"github.com/tmstff/kaddy/internal/util"
 )
 
+var log = logf.Log.WithName("kaddy_controller")
+
 // KaddyReconciler reconciles a Kaddy object
 type KaddyReconciler struct {
 	client.Client
@@ -105,30 +107,32 @@ func (r *KaddyReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 
 func (r *KaddyReconciler) reconcileConfigMap(ctx context.Context, kaddy *kaddyv1alpha1.Kaddy) error {
 	configMapFromCluster := new(corev1.ConfigMap)
-	configMapExisted := true
+	configMapExists := true
 	err := r.Get(ctx, types.NamespacedName{Name: kaddy.Name, Namespace: kaddy.Namespace}, configMapFromCluster)
 	if err != nil {
 		if errors.IsNotFound(err) {
-			configMapExisted = false
-			cm := r.configMapForKaddy(kaddy)
-			if err = r.Create(ctx, cm); err != nil {
-				return err
-			}
-			err = ctrl.SetControllerReference(kaddy, cm, r.Scheme) // for later automatic deletion
-			if err != nil {
-				return err
-			}
+			configMapExists = false
 		} else {
 			return err
 		}
 	}
 
-	if configMapExisted {
+	if configMapExists {
 		updatedConfigMap := r.configMapForKaddy(kaddy)
 		if !reflect.DeepEqual(configMapFromCluster.Data, updatedConfigMap.Data) {
 			if err := r.Update(ctx, updatedConfigMap); err != nil {
 				return err
 			}
+		}
+	} else {
+		cm := r.configMapForKaddy(kaddy)
+		err := r.Create(ctx, cm)
+		if err != nil {
+			return err
+		}
+		err = ctrl.SetControllerReference(kaddy, cm, r.Scheme) // for later automatic deletion
+		if err != nil {
+			return err
 		}
 	}
 	return nil
@@ -180,7 +184,8 @@ func (r *KaddyReconciler) reconcilePVC(ctx context.Context, kaddy *kaddyv1alpha1
 		}
 	} else {
 		pvc := r.pvcForKaddy(kaddy)
-		if err = r.Create(ctx, pvc); err != nil {
+		err := r.Create(ctx, pvc)
+		if err != nil {
 			return err
 		}
 		err = ctrl.SetControllerReference(kaddy, pvc, r.Scheme) // for later automatic deletion
@@ -224,21 +229,16 @@ func (r *KaddyReconciler) reconcileDeployment(ctx context.Context, kaddy *kaddyv
 	}
 
 	if deploymentExists {
-		updatedDeployment, err := r.deploymentForKaddy(ctx, kaddy)
-		if err != nil {
-			return err
-		}
+		updatedDeployment := r.deploymentForKaddy(ctx, kaddy)
 		if !reflect.DeepEqual(deploymentFromCluster.Spec, updatedDeployment.Spec) {
 			if err := r.Update(ctx, updatedDeployment); err != nil {
 				return err
 			}
 		}
 	} else {
-		d, err := r.deploymentForKaddy(ctx, kaddy)
+		d := r.deploymentForKaddy(ctx, kaddy)
+		err := r.Create(ctx, d)
 		if err != nil {
-			return err
-		}
-		if err = r.Create(ctx, d); err != nil {
 			return err
 		}
 		err = ctrl.SetControllerReference(kaddy, d, r.Scheme) // for later automatic deletion
@@ -250,33 +250,28 @@ func (r *KaddyReconciler) reconcileDeployment(ctx context.Context, kaddy *kaddyv
 	return nil
 }
 
-func (r *KaddyReconciler) deploymentForKaddy(ctx context.Context, k *kaddyv1alpha1.Kaddy) (*appsv1.Deployment, error) {
+func (r *KaddyReconciler) deploymentForKaddy(ctx context.Context, kaddy *kaddyv1alpha1.Kaddy) *appsv1.Deployment {
 	replicas := int32(1)
 
-	cmChecksum, err := r.computeConfigMapChecksum(ctx, k)
-	if err != nil {
-		return nil, err
-	}
-
-	d := &appsv1.Deployment{
+	return &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      k.Name,
-			Namespace: k.Namespace,
+			Name:      kaddy.Name,
+			Namespace: kaddy.Namespace,
 		},
 		Spec: appsv1.DeploymentSpec{
 			Replicas: &replicas,
 			Selector: &metav1.LabelSelector{
-				MatchLabels: map[string]string{"app": k.Name},
+				MatchLabels: map[string]string{"app": kaddy.Name},
 			},
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
-					Labels:      map[string]string{"app": k.Name},
-					Annotations: map[string]string{"kaddy-config-map-checksum": cmChecksum},
+					Labels:      map[string]string{"app": kaddy.Name},
+					Annotations: map[string]string{"kaddy-config-map-checksum": r.computeConfigMapChecksum(ctx, kaddy)},
 				},
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{{
 						Image: "quay.io/hummingbird/caddy:latest",
-						Name:  k.Name,
+						Name:  kaddy.Name,
 						Ports: []corev1.ContainerPort{{
 							ContainerPort: 8080,
 							Name:          "http",
@@ -312,7 +307,7 @@ func (r *KaddyReconciler) deploymentForKaddy(ctx context.Context, k *kaddyv1alph
 							VolumeSource: corev1.VolumeSource{
 								ConfigMap: &corev1.ConfigMapVolumeSource{
 									LocalObjectReference: corev1.LocalObjectReference{
-										Name: k.Name,
+										Name: kaddy.Name,
 									},
 								},
 							},
@@ -320,7 +315,7 @@ func (r *KaddyReconciler) deploymentForKaddy(ctx context.Context, k *kaddyv1alph
 							Name: "data-vol",
 							VolumeSource: corev1.VolumeSource{
 								PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
-									ClaimName: k.Name + "-data",
+									ClaimName: kaddy.Name + "-data",
 								},
 							},
 						},
@@ -329,16 +324,16 @@ func (r *KaddyReconciler) deploymentForKaddy(ctx context.Context, k *kaddyv1alph
 			},
 		},
 	}
-	return d, nil
 }
 
-func (r *KaddyReconciler) computeConfigMapChecksum(ctx context.Context, kaddy *kaddyv1alpha1.Kaddy) (string, error) {
+func (r *KaddyReconciler) computeConfigMapChecksum(ctx context.Context, kaddy *kaddyv1alpha1.Kaddy) string {
 	configMapFromCluster := new(corev1.ConfigMap)
 	err := r.Get(ctx, types.NamespacedName{Name: kaddy.Name, Namespace: kaddy.Namespace}, configMapFromCluster)
 	if err != nil {
-		return "", err
+		log.Error(err, fmt.Sprintf("Could not get config map (name='%s', namespace='%s') to compute it's checksum", kaddy.Name, kaddy.Namespace))
+		return ""
 	}
-	return util.CheckSumOf(configMapFromCluster.Data), nil
+	return util.CheckSumOf(configMapFromCluster.Data)
 }
 
 func (r *KaddyReconciler) reconcileService(ctx context.Context, kaddy *kaddyv1alpha1.Kaddy) error {
@@ -362,7 +357,8 @@ func (r *KaddyReconciler) reconcileService(ctx context.Context, kaddy *kaddyv1al
 		}
 	} else {
 		s := r.serviceForKaddy(kaddy)
-		if err := r.Create(ctx, s); err != nil {
+		err := r.Create(ctx, s)
+		if err != nil {
 			return err
 		}
 		err = ctrl.SetControllerReference(kaddy, s, r.Scheme) // for later automatic deletion
