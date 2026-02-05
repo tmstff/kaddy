@@ -106,31 +106,30 @@ func (r *KaddyReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 }
 
 func (r *KaddyReconciler) reconcileConfigMap(ctx context.Context, kaddy *kaddyv1alpha1.Kaddy) error {
-	configMapFromCluster := new(corev1.ConfigMap)
-	configMapExists := true
-	err := r.Get(ctx, types.NamespacedName{Name: kaddy.Name, Namespace: kaddy.Namespace}, configMapFromCluster)
+	observed := new(corev1.ConfigMap)
+	present := true
+	err := r.Get(ctx, types.NamespacedName{Name: kaddy.Name, Namespace: kaddy.Namespace}, observed)
 	if err != nil {
 		if errors.IsNotFound(err) {
-			configMapExists = false
+			present = false
 		} else {
 			return err
 		}
 	}
 
-	if configMapExists {
-		updatedConfigMap := r.configMapForKaddy(kaddy)
-		if !reflect.DeepEqual(configMapFromCluster.Data, updatedConfigMap.Data) {
-			if err := r.Update(ctx, updatedConfigMap); err != nil {
+	desired := r.configMapForKaddy(kaddy)
+	if present {
+		if !reflect.DeepEqual(observed.Data, desired.Data) {
+			if err := r.Update(ctx, desired); err != nil {
 				return err
 			}
 		}
 	} else {
-		cm := r.configMapForKaddy(kaddy)
-		err := r.Create(ctx, cm)
+		err := r.Create(ctx, desired)
 		if err != nil {
 			return err
 		}
-		err = ctrl.SetControllerReference(kaddy, cm, r.Scheme) // for later automatic deletion
+		err = ctrl.SetControllerReference(kaddy, desired, r.Scheme) // for later automatic deletion
 		if err != nil {
 			return err
 		}
@@ -164,31 +163,30 @@ func (*KaddyReconciler) caddyfileFor(localDomainNames []string) string {
 }
 
 func (r *KaddyReconciler) reconcilePVC(ctx context.Context, kaddy *kaddyv1alpha1.Kaddy) error {
-	pvcFromCluster := &corev1.PersistentVolumeClaim{}
-	pvcExists := true
-	err := r.Get(ctx, types.NamespacedName{Name: kaddy.Name, Namespace: kaddy.Namespace}, pvcFromCluster)
+	observed := &corev1.PersistentVolumeClaim{}
+	present := true
+	err := r.Get(ctx, types.NamespacedName{Name: kaddy.Name, Namespace: kaddy.Namespace}, observed)
 	if err != nil {
 		if errors.IsNotFound(err) {
-			pvcExists = false
+			present = false
 		} else {
 			return err
 		}
 	}
 
-	if pvcExists {
-		updatedDeployment := r.pvcForKaddy(kaddy)
-		if !reflect.DeepEqual(pvcFromCluster.Spec, updatedDeployment.Spec) {
-			if err := r.Update(ctx, updatedDeployment); err != nil {
+	desired := r.pvcForKaddy(kaddy)
+	if present {
+		if !reflect.DeepEqual(observed.Spec, desired.Spec) {
+			if err := r.Update(ctx, desired); err != nil {
 				return err
 			}
 		}
 	} else {
-		pvc := r.pvcForKaddy(kaddy)
-		err := r.Create(ctx, pvc)
+		err := r.Create(ctx, desired)
 		if err != nil {
 			return err
 		}
-		err = ctrl.SetControllerReference(kaddy, pvc, r.Scheme) // for later automatic deletion
+		err = ctrl.SetControllerReference(kaddy, desired, r.Scheme) // for later automatic deletion
 		if err != nil {
 			return err
 		}
@@ -217,31 +215,30 @@ func (r *KaddyReconciler) pvcForKaddy(kaddy *kaddyv1alpha1.Kaddy) *corev1.Persis
 }
 
 func (r *KaddyReconciler) reconcileDeployment(ctx context.Context, kaddy *kaddyv1alpha1.Kaddy) error {
-	deploymentFromCluster := &appsv1.Deployment{}
-	deploymentExists := true
-	err := r.Get(ctx, types.NamespacedName{Name: kaddy.Name, Namespace: kaddy.Namespace}, deploymentFromCluster)
+	observed := &appsv1.Deployment{}
+	present := true
+	err := r.Get(ctx, types.NamespacedName{Name: kaddy.Name, Namespace: kaddy.Namespace}, observed)
 	if err != nil {
 		if errors.IsNotFound(err) {
-			deploymentExists = false
+			present = false
 		} else {
 			return err
 		}
 	}
 
-	if deploymentExists {
-		updatedDeployment := r.deploymentForKaddy(ctx, kaddy)
-		if !reflect.DeepEqual(deploymentFromCluster.Spec, updatedDeployment.Spec) {
-			if err := r.Update(ctx, updatedDeployment); err != nil {
+	desired := r.deploymentForKaddy(ctx, kaddy)
+	if present {
+		if !reflect.DeepEqual(observed.Spec, desired.Spec) {
+			if err := r.Update(ctx, desired); err != nil {
 				return err
 			}
 		}
 	} else {
-		d := r.deploymentForKaddy(ctx, kaddy)
-		err := r.Create(ctx, d)
+		err := r.Create(ctx, desired)
 		if err != nil {
 			return err
 		}
-		err = ctrl.SetControllerReference(kaddy, d, r.Scheme) // for later automatic deletion
+		err = ctrl.SetControllerReference(kaddy, desired, r.Scheme) // for later automatic deletion
 		if err != nil {
 			return err
 		}
@@ -337,31 +334,30 @@ func (r *KaddyReconciler) computeConfigMapChecksum(ctx context.Context, kaddy *k
 }
 
 func (r *KaddyReconciler) reconcileService(ctx context.Context, kaddy *kaddyv1alpha1.Kaddy) error {
-	serviceFromCluster := &corev1.Service{}
-	serviceExists := true
-	err := r.Get(ctx, types.NamespacedName{Name: kaddy.Name, Namespace: kaddy.Namespace}, serviceFromCluster)
+	observed := &corev1.Service{}
+	present := true
+	err := r.Get(ctx, types.NamespacedName{Name: kaddy.Name, Namespace: kaddy.Namespace}, observed)
 	if err != nil {
 		if errors.IsNotFound(err) {
-			serviceExists = false
+			present = false
 		} else {
 			return err
 		}
 	}
 
-	if serviceExists {
-		updatedService := r.serviceForKaddy(kaddy)
-		if !reflect.DeepEqual(serviceFromCluster.Spec, updatedService.Spec) {
-			if err := r.Update(ctx, updatedService); err != nil {
+	desired := r.serviceForKaddy(kaddy)
+	if present {
+		if !reflect.DeepEqual(observed.Spec, desired.Spec) {
+			if err := r.Update(ctx, desired); err != nil {
 				return err
 			}
 		}
 	} else {
-		s := r.serviceForKaddy(kaddy)
-		err := r.Create(ctx, s)
+		err := r.Create(ctx, desired)
 		if err != nil {
 			return err
 		}
-		err = ctrl.SetControllerReference(kaddy, s, r.Scheme) // for later automatic deletion
+		err = ctrl.SetControllerReference(kaddy, desired, r.Scheme) // for later automatic deletion
 		if err != nil {
 			return err
 		}
