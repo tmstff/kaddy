@@ -2,7 +2,6 @@
 
 ## v0
 
-- [ ] create basic documentation
 - [ ] improve unit tests
 - [ ] improve e2e tests
 - [ ] improve retry & backoff
