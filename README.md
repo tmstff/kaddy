@@ -3,7 +3,7 @@
 An operator to deploy a [caddy](https://caddyserver.com/) in [OCP](https://docs.redhat.com/en/documentation/openshift_container_platform/).
 
 > [!CAUTION]  
-> Currently under development, there a still a lot of **[open toDos](TODO.md)**
+> Currently under development, there are still a lot of **[open toDos](TODO.md)**
 
 ## General Prerequisites
 - [GoLang distribution](https://go.dev/doc/install)
