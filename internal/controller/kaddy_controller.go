@@ -213,6 +213,8 @@ func (r *KaddyReconciler) pvcForKaddy(kaddy *kaddyv1alpha1.Kaddy) *corev1.Persis
 	return pvc
 }
 
+// cmDataHash is a hash from the data of the one config map we have - and it is used to make sure that
+// the pods are restarted when a change in the config map occurs, by adding the hash as annotation to the deployment
 func (r *KaddyReconciler) reconcileDeployment(ctx context.Context, kaddy *kaddyv1alpha1.Kaddy, cmDataHash string) error {
 	observed := &appsv1.Deployment{}
 	present := true
