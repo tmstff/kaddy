@@ -1,10 +1,53 @@
 # kaddy
-// TODO(user): Add simple overview of use/purpose
 
-## Description
-// TODO(user): An in-depth paragraph about your project and overview of use
+An operator to deploy a [caddy](https://caddyserver.com/) in [OCP](https://docs.redhat.com/en/documentation/openshift_container_platform/).
 
-## Getting Started
+> [!CAUTION]  
+> Currently under development, there a still a lot of **[open toDos](TODO.md)**
+
+## General Prerequisites
+- [GoLang distribution](https://go.dev/doc/install)
+- [Make](https://www.gnu.org/software/make/#download)
+- [podman](https://podman.io/docs/installation)
+
+## linting & testing
+
+### Prerequisites
+- [`golandcli-lint`](https://golangci-lint.run/docs/welcome/install/local/) - for linting
+- [Kind](https://kind.sigs.k8s.io/docs/user/quick-start/#installation) - for e2e tests
+
+### Commands
+```sh
+golangci-lint run                       # lint
+make test                               # run unit tests
+make test-e2e CONTAINER_TOOL=podman     # run e2e tests
+```
+
+## Deploy a new Operator Version
+
+### Prerequisites
+- [Operator SDK](https://sdk.operatorframework.io/docs/building-operators/golang/installation/)
+- a running OCP cluster (e.g. using [crc](https://www.redhat.com/en/blog/install-openshift-local))
+- [openshift CLI / `oc`](https://docs.redhat.com/en/documentation/openshift_container_platform/4.21/html/cli_tools/openshift-cli-oc)
+  - logged in to running cluster
+- an image registry to store the operator (e.g. [quay.io](https://quay.io))
+  - repective credentials provided for podman
+
+### Commands
+
+Example - replace version and image registry as desired
+
+```sh
+KADDY_VERSION=0.0.6
+REGISTRY=quay.io/tmstff
+make docker-build docker-push CONTAINER_TOOL=podman IMG=$REGISTRY/kaddy:$KADDY_VERSION
+make bundle bundle-build bundle-push CONTAINER_TOOL=podman IMG=$REGISTRY/kaddy:$KADDY_VERSION VERSION=$KADDY_VERSION
+oc delete catalogsources kaddy-catalog
+operator-sdk run bundle $REGISTRY/kaddy-bundle:$KADDY_VERSION
+oc apply -f config/samples/kaddy_v1alpha1_kaddy.yaml
+```
+
+## Standard Documentation for Operators created with the [Operator SDK](https://sdk.operatorframework.io/docs/building-operators/golang/)
 
 ### Prerequisites
 - go version v1.24.0+
