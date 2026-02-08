@@ -29,6 +29,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
@@ -249,15 +250,13 @@ func (r *KaddyReconciler) reconcileDeployment(ctx context.Context, kaddy *kaddyv
 }
 
 func (r *KaddyReconciler) deploymentForKaddy(kaddy *kaddyv1alpha1.Kaddy, cmDataHash string) *appsv1.Deployment {
-	replicas := int32(1)
-
 	return &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      kaddy.Name,
 			Namespace: kaddy.Namespace,
 		},
 		Spec: appsv1.DeploymentSpec{
-			Replicas: &replicas,
+			Replicas: ptr.To(int32(1)),
 			Selector: &metav1.LabelSelector{
 				MatchLabels: map[string]string{"app": kaddy.Name},
 			},
