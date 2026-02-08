@@ -4,6 +4,7 @@
 
 - [ ] create basic documentation
 - [ ] improve unit tests
+- [ ] improve e2e tests
 - [ ] improve retry & backoff
 - [ ] get github pipeline for e2e tests running
   - setup registry.redhat.io authentication in a github action
