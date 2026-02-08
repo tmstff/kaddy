@@ -37,8 +37,6 @@ import (
 	"github.com/tmstff/kaddy/internal/util"
 )
 
-var log = logf.Log.WithName("kaddy_controller")
-
 // KaddyReconciler reconciles a Kaddy object
 type KaddyReconciler struct {
 	client.Client
@@ -80,7 +78,7 @@ func (r *KaddyReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 		return ctrl.Result{}, err
 	}
 
-	err = r.reconcileConfigMap(ctx, kaddy)
+	cmDataHash, err := r.reconcileConfigMap(ctx, kaddy)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
@@ -90,7 +88,7 @@ func (r *KaddyReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 		return ctrl.Result{}, err
 	}
 
-	err = r.reconcileDeployment(ctx, kaddy)
+	err = r.reconcileDeployment(ctx, kaddy, cmDataHash)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
@@ -105,36 +103,37 @@ func (r *KaddyReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 	return ctrl.Result{Requeue: true}, nil
 }
 
-func (r *KaddyReconciler) reconcileConfigMap(ctx context.Context, kaddy *kaddyv1alpha1.Kaddy) error {
+func (r *KaddyReconciler) reconcileConfigMap(ctx context.Context, kaddy *kaddyv1alpha1.Kaddy) (dataHash string, err error) {
 	observed := new(corev1.ConfigMap)
 	present := true
-	err := r.Get(ctx, types.NamespacedName{Name: kaddy.Name, Namespace: kaddy.Namespace}, observed)
+	err = r.Get(ctx, types.NamespacedName{Name: kaddy.Name, Namespace: kaddy.Namespace}, observed)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			present = false
 		} else {
-			return err
+			return "", err
 		}
 	}
 
 	desired := r.configMapForKaddy(kaddy)
 	if present {
 		if !reflect.DeepEqual(observed.Data, desired.Data) {
-			if err := r.Update(ctx, desired); err != nil {
-				return err
+			err = r.Update(ctx, desired)
+			if err != nil {
+				return "", err
 			}
 		}
 	} else {
-		err := r.Create(ctx, desired)
+		err = r.Create(ctx, desired)
 		if err != nil {
-			return err
+			return "", err
 		}
 		err = ctrl.SetControllerReference(kaddy, desired, r.Scheme) // for later automatic deletion
 		if err != nil {
-			return err
+			return "", err
 		}
 	}
-	return nil
+	return util.CheckSumOf(desired.Data), nil
 }
 
 func (r *KaddyReconciler) configMapForKaddy(k *kaddyv1alpha1.Kaddy) *corev1.ConfigMap {
@@ -214,7 +213,7 @@ func (r *KaddyReconciler) pvcForKaddy(kaddy *kaddyv1alpha1.Kaddy) *corev1.Persis
 	return pvc
 }
 
-func (r *KaddyReconciler) reconcileDeployment(ctx context.Context, kaddy *kaddyv1alpha1.Kaddy) error {
+func (r *KaddyReconciler) reconcileDeployment(ctx context.Context, kaddy *kaddyv1alpha1.Kaddy, cmDataHash string) error {
 	observed := &appsv1.Deployment{}
 	present := true
 	err := r.Get(ctx, types.NamespacedName{Name: kaddy.Name, Namespace: kaddy.Namespace}, observed)
@@ -226,7 +225,7 @@ func (r *KaddyReconciler) reconcileDeployment(ctx context.Context, kaddy *kaddyv
 		}
 	}
 
-	desired := r.deploymentForKaddy(ctx, kaddy)
+	desired := r.deploymentForKaddy(kaddy, cmDataHash)
 	if present {
 		if !reflect.DeepEqual(observed.Spec, desired.Spec) {
 			if err := r.Update(ctx, desired); err != nil {
@@ -247,7 +246,7 @@ func (r *KaddyReconciler) reconcileDeployment(ctx context.Context, kaddy *kaddyv
 	return nil
 }
 
-func (r *KaddyReconciler) deploymentForKaddy(ctx context.Context, kaddy *kaddyv1alpha1.Kaddy) *appsv1.Deployment {
+func (r *KaddyReconciler) deploymentForKaddy(kaddy *kaddyv1alpha1.Kaddy, cmDataHash string) *appsv1.Deployment {
 	replicas := int32(1)
 
 	return &appsv1.Deployment{
@@ -263,7 +262,7 @@ func (r *KaddyReconciler) deploymentForKaddy(ctx context.Context, kaddy *kaddyv1
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels:      map[string]string{"app": kaddy.Name},
-					Annotations: map[string]string{"kaddy-config-map-checksum": r.computeConfigMapChecksum(ctx, kaddy)},
+					Annotations: map[string]string{"kaddy-config-map-checksum": cmDataHash},
 				},
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{{
@@ -321,16 +320,6 @@ func (r *KaddyReconciler) deploymentForKaddy(ctx context.Context, kaddy *kaddyv1
 			},
 		},
 	}
-}
-
-func (r *KaddyReconciler) computeConfigMapChecksum(ctx context.Context, kaddy *kaddyv1alpha1.Kaddy) string {
-	configMapFromCluster := new(corev1.ConfigMap)
-	err := r.Get(ctx, types.NamespacedName{Name: kaddy.Name, Namespace: kaddy.Namespace}, configMapFromCluster)
-	if err != nil {
-		log.Error(err, fmt.Sprintf("Could not get config map (name='%s', namespace='%s') to compute it's checksum", kaddy.Name, kaddy.Namespace))
-		return ""
-	}
-	return util.CheckSumOf(configMapFromCluster.Data)
 }
 
 func (r *KaddyReconciler) reconcileService(ctx context.Context, kaddy *kaddyv1alpha1.Kaddy) error {
