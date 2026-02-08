@@ -44,7 +44,8 @@ make docker-build docker-push CONTAINER_TOOL=podman IMG=$REGISTRY/kaddy:$KADDY_V
 make bundle bundle-build bundle-push CONTAINER_TOOL=podman IMG=$REGISTRY/kaddy:$KADDY_VERSION VERSION=$KADDY_VERSION
 oc delete catalogsources kaddy-catalog
 operator-sdk run bundle $REGISTRY/kaddy-bundle:$KADDY_VERSION
-oc apply -f config/samples/kaddy_v1alpha1_kaddy.yaml
+oc new-project kaddy    # only the first time
+oc apply -f config/samples/kaddy_v1alpha1_kaddy.yaml -n kaddy
 ```
 
 ## Standard Documentation for Operators created with the [Operator SDK](https://sdk.operatorframework.io/docs/building-operators/golang/)
