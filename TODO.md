@@ -2,6 +2,8 @@
 
 ## v0
 
+- [ ] fix reconciliations: only compare attributes we set ourselves, not whole spec
+- [ ] create cluster role & binding for PVC access
 - [ ] improve unit tests
 - [ ] improve e2e tests
 - [ ] improve retry & backoff
