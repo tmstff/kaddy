@@ -2,7 +2,6 @@
 
 ## v0
 
-- [ ] fix reconciliations: only compare attributes we set ourselves, not whole spec
 - [ ] improve e2e tests
 - [ ] fix PVC Problem
 - [ ] improve unit tests
