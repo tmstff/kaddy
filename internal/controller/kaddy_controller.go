@@ -84,6 +84,8 @@ func (r *KaddyReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 		return ctrl.Result{}, err
 	}
 
+	// TODO handle service account
+
 	err = r.reconcilePVC(ctx, kaddy)
 	if err != nil {
 		return ctrl.Result{}, err

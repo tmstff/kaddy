@@ -45,6 +45,8 @@ make bundle bundle-build bundle-push CONTAINER_TOOL=podman IMG=$REGISTRY/kaddy:$
 oc delete catalogsources kaddy-catalog
 operator-sdk run bundle $REGISTRY/kaddy-bundle:$KADDY_VERSION
 oc new-project kaddy    # only the first time
+oc apply -f .manifests-tryout/cluster-role.yaml -n kaddy    # workaround until implemented
+oc apply -f .manifests-tryout/route.yaml -n kaddy           # workaround until implemented
 oc apply -f config/samples/kaddy_v1alpha1_kaddy.yaml -n kaddy
 ```
 
