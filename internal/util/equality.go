@@ -17,7 +17,6 @@ limitations under the License.
 package util
 
 import (
-	"errors"
 	"reflect"
 
 	"github.com/google/go-cmp/cmp"
@@ -47,13 +46,13 @@ func ignoreZeroFields(desired any) cmp.Option {
 }
 
 // NonZeroDeepEqual performs a deep equal on two structs, ignoring fields that are zero in "desired" and unexported fields.
-// It return "true" when  they are equal this way, or "false" if not.
-// An error is returned, when any of the inpt parameters is no struct.
-func NonZeroDeepEqual(desired, current any) (bool, error) {
+// It returns "true" when  they are equal this way, or "false" if not.
+// It panics when any of the inpt parameters is no struct.
+func NonZeroDeepEqual(desired, current any) bool {
 	t := reflect.TypeOf(desired)
 	if t.Kind() != reflect.Struct {
-		return false, errors.New("desired must be a struct")
+		panic("desired must be a struct")
 	}
 
-	return cmp.Equal(desired, current, cmpopts.IgnoreUnexported(), ignoreZeroFields(desired)), nil
+	return cmp.Equal(desired, current, cmpopts.IgnoreUnexported(), ignoreZeroFields(desired))
 }

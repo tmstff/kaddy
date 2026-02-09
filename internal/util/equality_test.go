@@ -17,7 +17,6 @@ limitations under the License.
 package util
 
 import (
-	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -45,28 +44,24 @@ func TestNonZeroDeepEqual(t *testing.T) {
 		name             string
 		desired, current any
 		expectedResult   bool
-		expectedError    error
 	}{
-		{"primitive value", "a", "a", false, errors.New("desired must be a struct")},
+		{"desired empty, current non-empty", Example{"", 0, nil, nil}, Example{"a", 1, m1, sl1}, true},
+		{"desired non-empty, current empty", Example{"a", 1, m1, sl1}, Example{"", 0, nil, nil}, false},
 
-		{"desired empty, current non-empty", Example{"", 0, nil, nil}, Example{"a", 1, m1, sl1}, true, nil},
-		{"desired non-empty, current empty", Example{"a", 1, m1, sl1}, Example{"", 0, nil, nil}, false, nil},
+		{"all equal", Example{"a", 1, m1, sl1}, Example{"a", 1, m1, sl1}, true},
+		{"string non-equal", Example{"a", 1, m1, sl1}, Example{"b", 1, m1, sl1}, false},
+		{"int non-equal", Example{"a", 1, m1, sl1}, Example{"a", 2, m1, sl1}, false},
+		{"map non-equal", Example{"a", 1, m1, sl1}, Example{"a", 1, m2, sl1}, false},
+		{"slice non-equal", Example{"a", 1, m1, sl1}, Example{"a", 1, m1, sl2}, false},
 
-		{"all equal", Example{"a", 1, m1, sl1}, Example{"a", 1, m1, sl1}, true, nil},
-		{"string non-equal", Example{"a", 1, m1, sl1}, Example{"b", 1, m1, sl1}, false, nil},
-		{"int non-equal", Example{"a", 1, m1, sl1}, Example{"a", 2, m1, sl1}, false, nil},
-		{"map non-equal", Example{"a", 1, m1, sl1}, Example{"a", 1, m2, sl1}, false, nil},
-		{"slice non-equal", Example{"a", 1, m1, sl1}, Example{"a", 1, m1, sl2}, false, nil},
-
-		{"nested equal, string empty", NestedExample{"", Example{"", 1, m1, sl1}}, NestedExample{"a", Example{"a", 1, m1, sl1}}, false, nil},
-		{"nested non-equal", NestedExample{"a", Example{"a", 1, m1, sl1}}, NestedExample{"a", Example{"b", 1, m1, sl1}}, false, nil},
+		{"nested equal, string empty", NestedExample{"", Example{"", 1, m1, sl1}}, NestedExample{"a", Example{"a", 1, m1, sl1}}, false},
+		{"nested non-equal", NestedExample{"a", Example{"a", 1, m1, sl1}}, NestedExample{"a", Example{"b", 1, m1, sl1}}, false},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := NonZeroDeepEqual(tt.desired, tt.current)
+			result := NonZeroDeepEqual(tt.desired, tt.current)
 			assert.Equal(t, tt.expectedResult, result)
-			assert.Equal(t, tt.expectedError, err)
 		})
 	}
 }
