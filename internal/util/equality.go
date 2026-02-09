@@ -46,6 +46,9 @@ func ignoreZeroFields(desired any) cmp.Option {
 	return cmpopts.IgnoreFields(desired, fields...)
 }
 
+// NonZeroDeepEqual performs a deep equal on two structs, ignoring fields that are zero in "desired" and unexported fields.
+// It return "true" when  they are equal this way, or "false" if not.
+// An error is returned, when any of the inpt parameters is no struct.
 func NonZeroDeepEqual(desired, current any) (bool, error) {
 	t := reflect.TypeOf(desired)
 	if t.Kind() != reflect.Struct {
