@@ -314,7 +314,7 @@ func (r *KaddyReconciler) deploymentForKaddy(kaddy *kaddyv1alpha1.Kaddy, cmDataH
 							Name: "data-vol",
 							VolumeSource: corev1.VolumeSource{
 								PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
-									ClaimName: kaddy.Name + "-data",
+									ClaimName: kaddy.Name,
 								},
 							},
 						},
