@@ -17,6 +17,7 @@ limitations under the License.
 package util
 
 import (
+	"errors"
 	"reflect"
 
 	"github.com/google/go-cmp/cmp"
@@ -45,6 +46,11 @@ func ignoreZeroFields(desired any) cmp.Option {
 	return cmpopts.IgnoreFields(desired, fields...)
 }
 
-func NonZeroDeepEqual(desired, current any) bool {
-	return cmp.Equal(desired, current, cmpopts.IgnoreUnexported(), ignoreZeroFields(desired))
+func NonZeroDeepEqual(desired, current any) (bool, error) {
+	t := reflect.TypeOf(desired)
+	if t.Kind() != reflect.Struct {
+		return false, errors.New("desired must be a struct")
+	}
+
+	return cmp.Equal(desired, current, cmpopts.IgnoreUnexported(), ignoreZeroFields(desired)), nil
 }
