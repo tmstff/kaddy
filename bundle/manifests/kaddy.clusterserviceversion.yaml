@@ -22,10 +22,10 @@ metadata:
         }
       ]
     capabilities: Basic Install
-    createdAt: "2025-12-23T21:27:18Z"
+    createdAt: "2026-02-08T20:58:10Z"
     operators.operatorframework.io/builder: operator-sdk-v1.42.0
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v4
-  name: kaddy.v0.0.5
+  name: kaddy.v0.0.6
   namespace: placeholder
 spec:
   apiservicedefinitions: {}
@@ -139,7 +139,7 @@ spec:
                 - --health-probe-bind-address=:8081
                 command:
                 - /manager
-                image: quay.io/tmstff/kaddy:0.0.5
+                image: quay.io/tmstff/kaddy:0.0.6
                 livenessProbe:
                   httpGet:
                     path: /healthz
@@ -227,4 +227,4 @@ spec:
   maturity: alpha
   provider:
     name: Tim
-  version: 0.0.5
+  version: 0.0.6
