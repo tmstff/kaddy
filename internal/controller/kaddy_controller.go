@@ -178,7 +178,7 @@ func (r *KaddyReconciler) reconcilePVC(ctx context.Context, kaddy *kaddyv1alpha1
 
 	desired := r.pvcForKaddy(kaddy)
 	if present {
-		if !reflect.DeepEqual(observed.Spec, desired.Spec) {
+		if !util.NonZeroDeepEqual(desired.Spec, observed.Spec) {
 			if err := r.Update(ctx, desired); err != nil {
 				return err
 			}
@@ -232,7 +232,7 @@ func (r *KaddyReconciler) reconcileDeployment(ctx context.Context, kaddy *kaddyv
 
 	desired := r.deploymentForKaddy(kaddy, cmDataHash)
 	if present {
-		if !reflect.DeepEqual(observed.Spec, desired.Spec) {
+		if !util.NonZeroDeepEqual(desired.Spec, observed.Spec) {
 			if err := r.Update(ctx, desired); err != nil {
 				return err
 			}
@@ -339,7 +339,7 @@ func (r *KaddyReconciler) reconcileService(ctx context.Context, kaddy *kaddyv1al
 
 	desired := r.serviceForKaddy(kaddy)
 	if present {
-		if !reflect.DeepEqual(observed.Spec, desired.Spec) {
+		if !util.NonZeroDeepEqual(desired.Spec, observed.Spec) {
 			if err := r.Update(ctx, desired); err != nil {
 				return err
 			}
